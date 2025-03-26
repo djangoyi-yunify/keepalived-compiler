@@ -1,0 +1,9 @@
+ARG OSV
+ARG NAMESPACE
+FROM ${NAMESPACE}/kylin-server:${OSV}
+
+CMD ["bash"]
+RUN dnf install openssl-devel libnl3-devel systemd-devel gcc make -y \
+    && mkdir /workspace
+
+VOLUME [ "/workspace" ]

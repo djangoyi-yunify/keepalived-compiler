@@ -1,0 +1,72 @@
+name: Compiler workflow for kylin
+on:
+  workflow_dispatch:
+    inputs:
+      keepalivedv:
+        description: 'keepalived version'
+        default: '2.3.2'
+        required: false
+        type: string
+      osv:
+        description: 'kylin version'
+        default: '10sp3'
+        required: false
+        type: string
+
+jobs:
+  compile:
+    strategy:
+      matrix:
+        platform: ["amd64", "arm64"]
+        # platform: ["amd64"]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+    - name: Prepare keepalived src
+      run: |
+        wget https://www.keepalived.org/software/keepalived-${{ inputs.keepalivedv }}.tar.gz
+        tar -xzf keepalived-${{ inputs.keepalivedv }}.tar.gz
+        ls -lh keepalived-${{ inputs.keepalivedv }}.tar.gz
+      working-directory: /tmp
+    - name: compile keepalived
+      run: |
+        docker run --platform linux/${{ matrix.platform }} --rm -v /tmp/keepalived-${{ inputs.keepalivedv }}:/workspace -w /workspace djangoyi/keepalived-compiler:kylin-${{ inputs.osv }} bash -c "mkdir output && ./configure && make && make install DESTDIR=/workspace/output"
+    - name: pack bin files
+      run: |
+        cd /tmp/keepalived-${{ inputs.keepalivedv }} && tar -czf /tmp/keepalived-${{ inputs.keepalivedv }}-${{ matrix.platform }}.tgz output/*
+      working-directory: /tmp
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: kylin-${{ matrix.platform }}
+        path: /tmp/keepalived-${{ inputs.keepalivedv }}-${{ matrix.platform }}.tgz
+
+  release:
+    runs-on: ubuntu-latest
+    needs: compile
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    # - name: Remove release
+    #   uses: liudonghua123/delete-release-action@v1
+    #   with:
+    #     release_name: redis-${{ inputs.redisv }}_ubuntu-${{ inputs.osv }}
+    #     suppress_errors: true
+    # - name: Remove tag
+    #   run: |
+    #     git tag -d mongo-${{ needs.export.outputs.mongo }}_ubuntu-${{ needs.export.outputs.ubuntu }} || :
+    #     git push origin --delete mongo-${{ needs.export.outputs.mongo }}_ubuntu-${{ needs.export.outputs.ubuntu }} || :
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        pattern: kylin-*
+        path: release
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          release/kylin-*/*
+        tag_name: keepalived-${{ inputs.keepalivedv }}_kylin-${{ inputs.osv }}
