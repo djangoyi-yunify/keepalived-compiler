@@ -1,0 +1,9 @@
+ARG OSV
+FROM ubuntu:${OSV}
+
+CMD ["bash"]
+RUN apt update \
+    && apt install libssl-dev libnl-3-dev libsystemd-dev gcc make -y \
+    && mkdir /workspace
+
+VOLUME [ "/workspace" ]
